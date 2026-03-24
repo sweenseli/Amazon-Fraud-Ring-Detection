@@ -1,0 +1,87 @@
+// Amazon Return Fraud Ring Detection System
+// BEMM459 — Database Technologies for Business Analytics
+// University of Exeter
+// Paste this into https://dbdiagram.io
+
+Table Analyst {
+  AnalystID   int          [pk, increment]
+  FirstName   varchar(50)  [not null]
+  LastName    varchar(50)  [not null]
+  Email       varchar(100) [not null, unique]
+  Department  varchar(50)  [not null, default: 'Fraud Prevention']
+  Role        varchar(50)  [not null, default: 'Analyst']
+}
+
+Table Customer {
+  CustomerID        int          [pk, increment]
+  FirstName         varchar(50)  [not null]
+  LastName          varchar(50)  [not null]
+  Email             varchar(100) [not null, unique]
+  Phone             varchar(20)  [not null, note: "Fraud signal: Duplicate Phone"]
+  DeviceFingerprint varchar(64)  [not null, note: "Fraud signal: Suspect eCommerce / Fraud Ring"]
+  IPAddress         varchar(45)  [note: "Fraud signal: Suspect eCommerce"]
+  Postcode          varchar(10)  [note: "Fraud signal: Fraud Ring geographic clustering"]
+  AccountCreatedAt  datetime     [not null, default: `now()`]
+}
+
+Table Address {
+  AddressID    int          [pk, increment]
+  CustomerID   int          [not null, ref: > Customer.CustomerID]
+  AddressLine1 varchar(100) [not null]
+  City         varchar(50)  [not null]
+  Postcode     varchar(10)  [not null, note: "Fraud signal: Fraud Ring clustering"]
+  Country      varchar(50)  [not null, default: 'UK']
+  AddressType  varchar(10)  [not null, note: "SHIPPING or BILLING"]
+}
+
+Table Product {
+  ProductID   int           [pk, increment]
+  ProductName varchar(100)  [not null]
+  Category    varchar(50)   [not null]
+  Price       decimal(10,2) [not null]
+  Description varchar(200)
+  StockLevel  int           [not null, default: 0]
+}
+
+Table Order {
+  OrderID      int           [pk, increment]
+  CustomerID   int           [not null, ref: > Customer.CustomerID]
+  AddressID    int           [not null, ref: > Address.AddressID]
+  CardLastFour char(4)       [not null, note: "Fraud signal: Skimming"]
+  BankRef      varchar(30)   [not null, note: "Fraud signal: Skimming + Fraud Ring"]
+  OrderCity    varchar(50)   [not null, note: "Fraud signal: Skimming (impossible travel)"]
+  OrderDate    datetime      [not null, default: `now()`]
+  TotalAmount  decimal(10,2) [not null]
+  OrderStatus  varchar(20)   [not null, default: 'PENDING', note: "PENDING / DELIVERED / CANCELLED"]
+}
+
+Table Return {
+  ReturnID     int           [pk, increment]
+  OrderID      int           [not null, ref: > Order.OrderID]
+  CustomerID   int           [not null, ref: > Customer.CustomerID]
+  ProductID    int           [not null, ref: > Product.ProductID]
+  ReturnDate   datetime      [not null, default: `now()`]
+  ReturnReason varchar(200)
+  ReturnStatus varchar(20)   [not null, default: 'PENDING', note: "PENDING / APPROVED / REJECTED"]
+  RefundAmount decimal(10,2) [not null]
+}
+
+Table Refund {
+  RefundID     int           [pk, increment]
+  ReturnID     int           [not null, ref: > Return.ReturnID]
+  BankRef      varchar(30)   [not null, note: "Fraud signal: Fraud Ring — refund destination"]
+  RefundAmount decimal(10,2) [not null]
+  RefundDate   datetime      [not null, default: `now()`]
+  RefundStatus varchar(20)   [not null, default: 'PENDING', note: "PENDING / PROCESSED / FAILED"]
+}
+
+Table FraudAlert {
+  FraudAlertID int           [pk, increment]
+  CustomerID   int           [not null, ref: > Customer.CustomerID]
+  AnalystID    int           [ref: > Analyst.AnalystID, note: "NULL = system-generated"]
+  AlertType    varchar(30)   [not null, note: "FRAUD_RING / DUPLICATE_PHONE / SKIMMING / SUSPECT_ECOMMERCE / HIGH_RETURN_RATE"]
+  DetectedAt   datetime      [not null, default: `now()`]
+  FraudScore   decimal(5,2)  [note: "Composite risk score — threshold >= 5.0"]
+  Status       varchar(20)   [not null, default: 'OPEN', note: "OPEN / CLOSED / ESCALATED"]
+  Notes        varchar(500)
+}
